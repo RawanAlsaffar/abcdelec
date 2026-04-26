@@ -1244,11 +1244,12 @@ with tab3:
             .reset_index()
         )
         contracts_yr.columns = ['رقم العداد', 'الاستهلاك (kWh)', 'المبلغ (SAR)', 'عدد الأشهر']
+        contracts_yr['رقم العداد'] = contracts_yr['رقم العداد'].astype(str)
         st.dataframe(
             contracts_yr.style.format({
                 'الاستهلاك (kWh)': '{:,.0f}',
                 'المبلغ (SAR)': '{:,.2f}'
-            }).background_gradient(subset=['الاستهلاك (kWh)'], cmap='Reds'),
+            }).map(lambda v: 'background-color: #fff5f5; color: #c0392b;' if isinstance(v, (int, float)) and v > 0 else '', subset=['الاستهلاك (kWh)']),
             use_container_width=True,
             hide_index=True
         )
@@ -1263,11 +1264,17 @@ with tab3:
 
     ca_24_sum = df[df['Year'] == 2024].groupby(['Collective_CA', 'Region_Major'])['Consumption_kWh'].sum().reset_index()
     ca_25_sum = df[df['Year'] == 2025].groupby('Collective_CA')['Consumption_kWh'].sum().reset_index()
-    ca_compare = ca_24_sum.merge(ca_25_sum, on='Collective_CA', suffixes=('_2024', '_2025'), how='outer').fillna(0)
+    ca_compare = ca_24_sum.merge(ca_25_sum, on='Collective_CA', suffixes=('_2024', '_2025'), how='outer')
+    # Fix mixed types: fill string columns with text, numeric with 0
+    ca_compare['Region_Major'] = ca_compare['Region_Major'].fillna('غير محدد').astype(str)
+    ca_compare['Consumption_kWh_2024'] = ca_compare['Consumption_kWh_2024'].fillna(0)
+    ca_compare['Consumption_kWh_2025'] = ca_compare['Consumption_kWh_2025'].fillna(0)
     ca_compare['التغيير_%'] = ca_compare.apply(
         lambda r: delta_pct(r['Consumption_kWh_2025'], r['Consumption_kWh_2024']), axis=1
     ).round(1)
     ca_compare.columns = ['Collective_CA', 'المنطقة', 'استهلاك_2024', 'استهلاك_2025', 'التغيير_%']
+    ca_compare['Collective_CA'] = ca_compare['Collective_CA'].astype(str)
+    ca_compare['المنطقة'] = ca_compare['المنطقة'].astype(str)
 
     cmp_col1, cmp_col2 = st.columns([2, 1])
     with cmp_col1:
@@ -1276,7 +1283,7 @@ with tab3:
                 'استهلاك_2024': '{:,.0f}',
                 'استهلاك_2025': '{:,.0f}',
                 'التغيير_%': '{:+.1f}%'
-            }).background_gradient(subset=['التغيير_%'], cmap='RdYlGn'),
+            }).map(lambda v: 'background-color: #e8f8e8; color: #27ae60;' if isinstance(v, (int, float)) and v > 0 else ('background-color: #fde8e8; color: #c0392b;' if isinstance(v, (int, float)) and v < 0 else ''), subset=['التغيير_%']),
             use_container_width=True,
             hide_index=True
         )
@@ -1479,6 +1486,7 @@ with tab_geo:
     st.markdown(section_header('ملخص', 'جدول ملخص المناطق'), unsafe_allow_html=True)
     region_tbl = region_geo.copy()
     region_tbl.columns = ['المنطقة', 'الاستهلاك (kWh)', 'المبلغ (SAR)', 'عدد الحسابات التعاقدية', 'عدد الحسابات التجميعية']
+    region_tbl['المنطقة'] = region_tbl['المنطقة'].astype(str)
     region_tbl['نسبة الاستهلاك %'] = (
         region_tbl['الاستهلاك (kWh)'] / region_tbl['الاستهلاك (kWh)'].sum() * 100
     ).round(1)
@@ -1487,7 +1495,7 @@ with tab_geo:
             'الاستهلاك (kWh)': '{:,.0f}',
             'المبلغ (SAR)': '{:,.2f}',
             'نسبة الاستهلاك %': '{:.1f}%'
-        }).background_gradient(subset=['الاستهلاك (kWh)'], cmap='Reds'),
+        }).map(lambda v: 'background-color: #fff5f5; color: #c0392b;' if isinstance(v, (int, float)) and v > 0 else '', subset=['الاستهلاك (kWh)']),
         use_container_width=True
     )
 
