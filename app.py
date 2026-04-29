@@ -1706,7 +1706,7 @@ with tab_geo:
         use_container_width=True
     )
     #  خريطة المدن بالإحداثيات الحقيقية من البيانات
-    st.markdown(section_header('خريطة', 'خريطة الاستهلاك حسب المدن (إحداثيات حقيقية)'), unsafe_allow_html=True)
+    st.markdown(section_header('خريطة', 'خريطة الاستهلاك حسب المدن '), unsafe_allow_html=True)
     # استخدام الإحداثيات الحقيقية من عمودَي Latitude و Longitude
     city_geo = df_f.groupby('Region_City').agg(
         Consumption=('Consumption_kWh', 'sum'),
