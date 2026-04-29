@@ -1187,51 +1187,7 @@ with tab2:
         fig_down.update_yaxes(**light_yaxis(tickfont=dict(color='#1a1a2e', size=12), type='category', dtick=1))
         fig_down.update_layout(margin=dict(l=200))
         st.plotly_chart(fig_down, use_container_width=True, key='bot_ca')
-    #  مقارنة أعلى 5 حسابات بين السنوات
-    st.markdown(section_header('مقارنة', f'مقارنة أعلى 5 حسابات بين السنوات ({_metric_label})'), unsafe_allow_html=True)
-    _top5_24 = (
-        df[df['Year'] == 2024]
-        .groupby('Collective_CA')
-        .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
-        .nlargest(5, _metric_col)
-        .reset_index()
-    )
-    _top5_25 = (
-        df[df['Year'] == 2025]
-        .groupby('Collective_CA')
-        .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
-        .nlargest(5, _metric_col)
-        .reset_index()
-    )
-    _all_top_cas = sorted(set(_top5_24['Collective_CA'].tolist()) | set(_top5_25['Collective_CA'].tolist()))
-    _cmp_24 = df[df['Year'] == 2024].groupby('Collective_CA').agg(
-        Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum')
-    ).reset_index()
-    _cmp_25 = df[df['Year'] == 2025].groupby('Collective_CA').agg(
-        Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum')
-    ).reset_index()
-    fig_cmp5 = go.Figure()
-    fig_cmp5.add_trace(go.Bar(
-        name='2024',
-        x=_all_top_cas,
-        y=[_cmp_24[_cmp_24['Collective_CA'] == ca][_metric_col].sum() for ca in _all_top_cas],
-        marker=dict(color='#1a6eb5', opacity=0.85),
-    ))
-    fig_cmp5.add_trace(go.Bar(
-        name='2025',
-        x=_all_top_cas,
-        y=[_cmp_25[_cmp_25['Collective_CA'] == ca][_metric_col].sum() for ca in _all_top_cas],
-        marker=dict(color='#1e8c3a', opacity=0.85),
-    ))
-    _cmp5_layout = light_layout(height=380, showlegend=True, barmode='group')
-    _cmp5_layout['title'] = dict(
-        text=f'مقارنة أعلى الحسابات بين 2024 و2025 ({_metric_label})',
-        font=dict(size=14, color='#8b0000'), x=0.01
-    )
-    fig_cmp5.update_layout(**_cmp5_layout)
-    fig_cmp5.update_xaxes(**light_xaxis(tickangle=-30))
-    fig_cmp5.update_yaxes(**light_yaxis(tickformat=',.0f'))
-    st.plotly_chart(fig_cmp5, use_container_width=True, key='top5_compare')
+    
 #
 # تبويب 3: إدارة الأصول
 #
