@@ -11,19 +11,19 @@ warnings.filterwarnings('ignore')
 # المسار الأساسي للمشروع
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ─────────────────────────────────────────────
+#
 # إعدادات الصفحة
-# ─────────────────────────────────────────────
+#
 st.set_page_config(
     page_title="تحليل الكهرباء - الهلال الأحمر السعودي",
-    page_icon="⚡",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ─────────────────────────────────────────────
+#
 # CSS - هوية الهلال الأحمر السعودي (أحمر + رمادي + أبيض)
-# ─────────────────────────────────────────────
+#
 st.markdown("""
 <style>
 /* ===== الخلفية العامة ===== */
@@ -460,9 +460,9 @@ hr { border-color: #f0d8d8 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
+#
 # تحميل البيانات
-# ─────────────────────────────────────────────
+#
 @st.cache_data
 def load_data():
     df = pd.read_csv(os.path.join(BASE_DIR, 'SRCA_Electricity_Data.csv'))
@@ -516,9 +516,9 @@ pred_df = load_predictions()
 comp_df = load_q1_comparison()
 model_metrics = load_model_metrics()
 
-# ─────────────────────────────────────────────
+#
 # الثوابت
-# ─────────────────────────────────────────────
+#
 YEAR_COLORS = {2024: '#2980b9', 2025: '#27ae60', 2026: '#c0392b'}
 
 REGION_COLORS = {
@@ -544,15 +544,15 @@ NEAR_ZERO_THRESHOLD = 1.67
 def classify_consumption(total_kwh):
     """تصنيف الاستهلاك: صفري / منخفض جداً / حقيقي"""
     if total_kwh == 0:
-        return 'صفري', '#B71C1C', '🔴'
+        return 'صفري', '#B71C1C', ''
     elif total_kwh <= NEAR_ZERO_THRESHOLD:
         return 'منخفض جداً', '#E65100', '🟠'
     else:
         return 'حقيقي', '#2E7D32', '🟢'
 
-# ─────────────────────────────────────────────
+#
 # دوال مساعدة للرسوم البيانية
-# ─────────────────────────────────────────────
+#
 def light_layout(height=300, title='', showlegend=False, **kwargs):
     base = dict(
         height=height,
@@ -611,7 +611,7 @@ def kpi_card(label, value, delta=None, color='blue', icon=''):
     """إنشاء بطاقة KPI بحجم متوسط متوازن"""
     delta_html = ''
     if delta is not None:
-        arrow = '▲' if delta > 0 else '▼'
+        arrow = '' if delta > 0 else ''
         cls = 'up' if delta > 0 else 'down'
         delta_html = f'<div class="kpi-delta {cls}">{arrow} {abs(delta):.1f}% مقارنة بالعام السابق</div>'
     icon_html = f'<div class="kpi-icon">{icon}</div>' if icon else ''
@@ -666,16 +666,16 @@ def get_ca_summary(df_full, ca_id, year):
         'contracts': sorted(df_ca['Contract_Account'].unique().tolist())
     }
 
-# ─────────────────────────────────────────────
+#
 # الشريط الجانبي
-# ─────────────────────────────────────────────
+#
 with st.sidebar:
     logo_path = os.path.join(BASE_DIR, 'SRCAlogo_local_cmyk.jpg')
     if os.path.exists(logo_path):
         st.image(logo_path, use_container_width=True)
     else:
         st.markdown(
-            '<h2 style="text-align:center; color:#c0392b; font-size:18px;">🌙 الهلال الأحمر السعودي</h2>',
+            '<h2 style="text-align:center; color:#c0392b; font-size:18px;"> الهلال الأحمر السعودي</h2>',
             unsafe_allow_html=True
         )
 
@@ -705,8 +705,24 @@ with st.sidebar:
     regions = ['الكل'] + sorted(df['Region_Major'].dropna().unique().tolist())
     selected_region = st.selectbox("المنطقة الرئيسية", regions, key="region")
 
-    ca_options = ['الكل'] + sorted(df['Collective_CA'].unique().tolist())
-    selected_ca = st.selectbox("الحساب التجميعي", ca_options, key="ca")
+    # فلتر المدينة (يتغير بناءً على المنطقة المختارة)
+    if selected_region != 'الكل':
+        city_opts_filtered = sorted(df[df['Region_Major'] == selected_region]['Region_City'].dropna().unique().tolist())
+    else:
+        city_opts_filtered = sorted(df['Region_City'].dropna().unique().tolist())
+    city_options = ['الكل'] + city_opts_filtered
+    selected_city = st.selectbox('المدينة', city_options, key='city')
+    # فلتر الحساب التجميعي (يتغير بناءً على المنطقة والمدينة)
+    if selected_region != 'الكل' and selected_city != 'الكل':
+        ca_df_filtered = df[(df['Region_Major'] == selected_region) & (df['Region_City'] == selected_city)]
+    elif selected_region != 'الكل':
+        ca_df_filtered = df[df['Region_Major'] == selected_region]
+    elif selected_city != 'الكل':
+        ca_df_filtered = df[df['Region_City'] == selected_city]
+    else:
+        ca_df_filtered = df
+    ca_options = ['الكل'] + sorted(ca_df_filtered['Collective_CA'].unique().tolist())
+    selected_ca = st.selectbox('الحساب التجميعي', ca_options, key='ca')
 
     max_cons = int(df['Consumption_kWh'].max())
     cons_range = st.slider(
@@ -721,15 +737,17 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-# ─────────────────────────────────────────────
+#
 # تطبيق الفلاتر
-# ─────────────────────────────────────────────
+#
 mask = (
     df['Year'].isin(selected_years) &
     df['Consumption_kWh'].between(cons_range[0], cons_range[1])
 )
 if selected_region != 'الكل':
     mask &= df['Region_Major'] == selected_region
+if selected_city != 'الكل':
+    mask &= df['Region_City'] == selected_city
 if selected_ca != 'الكل':
     mask &= df['Collective_CA'] == selected_ca
 
@@ -738,9 +756,9 @@ df_24 = df_f[df_f['Year'] == 2024]
 df_25 = df_f[df_f['Year'] == 2025]
 df_26 = df_f[df_f['Year'] == 2026]
 
-# ─────────────────────────────────────────────
+#
 # الرأس الرئيسي - هوية الهلال الأحمر
-# ─────────────────────────────────────────────
+#
 total_records = len(df_f)
 st.markdown(f"""
 <div class="main-header">
@@ -749,15 +767,15 @@ st.markdown(f"""
         <p>هيئة الهلال الأحمر السعودي | بيانات 2024 - 2026</p>
     </div>
     <div style="text-align:left;">
-        <span class="badge badge-green">● مباشر</span>
+        <span class="badge badge-green"> مباشر</span>
         <div style="color:#ffd5d0; font-size:12px; margin-top:5px;">إجمالي السجلات: {total_records:,}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
+#
 # التبويبات الرئيسية
-# ─────────────────────────────────────────────
+#
 tab1, tab2, tab3, tab_geo, tab4 = st.tabs([
     " نظرة عامة",
     " التحليل الإحصائي",
@@ -766,11 +784,11 @@ tab1, tab2, tab3, tab_geo, tab4 = st.tabs([
     " توقعات 2026"
 ])
 
-# ══════════════════════════════════════════════
+#
 # تبويب 1: نظرة عامة
-# ══════════════════════════════════════════════
+#
 with tab1:
-    # ── مؤشرات الاستهلاك ──
+    #  مؤشرات الاستهلاك
     total_24 = df_24['Consumption_kWh'].sum()
     total_25 = df_25['Consumption_kWh'].sum()
     total_full_26 = pred_df['Predicted_Consumption'].sum()
@@ -798,10 +816,26 @@ with tab1:
         bill_25 = df_25['Bill_Amount'].sum()
         delta_bill = delta_pct(bill_25, bill_24)
         st.markdown(kpi_card("إجمالي الفواتير 2025", fmt_num(bill_25, 'SAR'), delta_bill, 'red'), unsafe_allow_html=True)
+    # صف ثالث: بطاقات الفواتير 2024 و2025 و2026
+    st.markdown(section_header('فواتير', 'إجمالي الفواتير حسب السنة (ريال سعودي)'), unsafe_allow_html=True)
+    bill_row3 = st.columns(3)
+    # تقدير فواتير 2026 بناءً على نسبة الفاتورة/الاستهلاك في 2025
+    _kwh_25_total = df[df['Year'] == 2025]['Consumption_kWh'].sum()
+    _sar_per_kwh_25 = bill_25 / _kwh_25_total if _kwh_25_total > 0 else 0
+    _total_pred_kwh_26 = pred_df['Predicted_Consumption'].sum()
+    bill_26_pred = _total_pred_kwh_26 * _sar_per_kwh_25
+    delta_bill_24_25 = delta_pct(bill_25, bill_24)
+    delta_bill_25_26 = delta_pct(bill_26_pred, bill_25)
+    with bill_row3[0]:
+        st.markdown(kpi_card("إجمالي الفواتير 2024", fmt_num(bill_24, 'SAR'), None, 'blue'), unsafe_allow_html=True)
+    with bill_row3[1]:
+        st.markdown(kpi_card("إجمالي الفواتير 2025", fmt_num(bill_25, 'SAR'), delta_bill_24_25, 'green'), unsafe_allow_html=True)
+    with bill_row3[2]:
+        st.markdown(kpi_card("تقدير فواتير 2026 (متوقع)", fmt_num(bill_26_pred, 'SAR'), delta_bill_25_26, 'orange'), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── عدد الحسابات التجميعية (ثابت) ──
+    #  عدد الحسابات التجميعية (ثابت)
     st.markdown(section_header('حسابات',  'عدد الحسابات التجميعية '), unsafe_allow_html=True)
     ca_cols = st.columns(3)
     with ca_cols[0]:
@@ -813,7 +847,7 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── الإحصاءات الوصفية للاستهلاك ──
+    #  الإحصاءات الوصفية للاستهلاك
     st.markdown(section_header('إحصاء', 'الإحصاءات الوصفية للاستهلاك (كيلوواط/ساعة)'), unsafe_allow_html=True)
 
     stat_cols = st.columns(3)
@@ -822,7 +856,7 @@ with tab1:
         st.markdown(f"""
         <div style="background:#f0f8ff; border:1px solid #bee3f8; border-radius:12px; padding:16px; margin-bottom:10px;">
             <div style="color:#2980b9; font-size:14px; font-weight:700; margin-bottom:12px; border-bottom:1px solid #bee3f8; padding-bottom:8px;">
-                📅 سنة 2024
+                 سنة 2024
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -839,7 +873,7 @@ with tab1:
         st.markdown(f"""
         <div style="background:#f0fff4; border:1px solid #c3e6cb; border-radius:12px; padding:16px; margin-bottom:10px;">
             <div style="color:#27ae60; font-size:14px; font-weight:700; margin-bottom:12px; border-bottom:1px solid #c3e6cb; padding-bottom:8px;">
-                📅 سنة 2025
+                 سنة 2025
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -851,7 +885,7 @@ with tab1:
         with sc4:
             st.markdown(f'<div class="stat-card"><div class="stat-label">الوسيط</div><div class="stat-value" style="color:#16a085;">{fmt_num(s25.median())}</div><div class="stat-year">كيلوواط/ساعة</div></div>', unsafe_allow_html=True)
             growth_rate = delta_pct(s25.mean(), df_24['Consumption_kWh'].mean())
-            arrow = '▲' if growth_rate >= 0 else '▼'
+            arrow = '' if growth_rate >= 0 else ''
             color = '#27ae60' if growth_rate >= 0 else '#c0392b'
             st.markdown(f'<div class="stat-card"><div class="stat-label">معدل التغير 24→25</div><div class="stat-value" style="color:{color};">{arrow} {abs(growth_rate):.1f}%</div><div class="stat-year">نسبة مئوية</div></div>', unsafe_allow_html=True)
 
@@ -859,7 +893,7 @@ with tab1:
         st.markdown(f"""
         <div style="background:#fff5f5; border:1px solid #f5c6c2; border-radius:12px; padding:16px; margin-bottom:10px;">
             <div style="color:#c0392b; font-size:14px; font-weight:700; margin-bottom:12px; border-bottom:1px solid #f5c6c2; padding-bottom:8px;">
-                📅 سنة 2026 (Q1)
+                 سنة 2026 (Q1)
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -874,7 +908,7 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── الاتجاه الشهري ──
+    #  الاتجاه الشهري
     st.markdown(section_header('بياني', 'الاتجاه الشهري للاستهلاك'), unsafe_allow_html=True)
 
     # ألوان ثابتة وواضحة: أزرق 2024 | أخضر 2025 | أحمر 2026
@@ -916,7 +950,7 @@ with tab1:
     ))
     st.plotly_chart(fig_trend, use_container_width=True, key="trend_line")
 
-    # ── توزيع المناطق ومقارنة 2024 vs 2025 ──
+    #  توزيع المناطق ومقارنة 2024 vs 2025
     col_reg, col_cmp = st.columns(2)
 
     with col_reg:
@@ -978,7 +1012,7 @@ with tab1:
         ))
         st.plotly_chart(fig_cmp, use_container_width=True, key="compare_bar")
 
-    # ── التوزيع الموسمي ──
+    #  التوزيع الموسمي
     season_map = {
         'الربيع': [3, 4, 5], 'الصيف': [6, 7, 8],
         'الخريف': [9, 10, 11], 'الشتاء': [12, 1, 2]
@@ -1004,9 +1038,9 @@ with tab1:
     fig_season.update_layout(**light_layout(height=280, title='توزيع الاستهلاك الموسمي', showlegend=False))
     st.plotly_chart(fig_season, use_container_width=True, key="season_pie")
 
-# ══════════════════════════════════════════════
+#
 # تبويب 2: التحليل الإحصائي
-# ══════════════════════════════════════════════
+#
 with tab2:
     st.markdown(section_header('تحليل', 'التحليل الإحصائي المتقدم'), unsafe_allow_html=True)
 
@@ -1037,7 +1071,7 @@ with tab2:
     fig_rca.update_yaxes(**light_yaxis())
     st.plotly_chart(fig_rca, use_container_width=True, key="rca_bar")
 
-    # ── مؤشرات النمو السنوي ──
+    #  مؤشرات النمو السنوي
     st.markdown(section_header('نمو', 'مؤشرات النمو السنوي (2024 → 2025)'), unsafe_allow_html=True)
     # حساب المؤشرات السنوية
     total_24_stat = df_f[df_f['Year'] == 2024]['Consumption_kWh'].sum()
@@ -1057,7 +1091,7 @@ with tab2:
     g_col1, g_col2, g_col3 = st.columns(3)
 
     def _growth_card(col_obj, label, pct_val, v24, v25, extra_text=''):
-        arrow_g = '▲' if pct_val >= 0 else '▼'
+        arrow_g = '' if pct_val >= 0 else ''
         color_g = '#27ae60' if pct_val >= 0 else '#c0392b'
         bg_g    = '#f0fff4' if pct_val >= 0 else '#fff5f5'
         brd_g   = '#c3e6cb' if pct_val >= 0 else '#f5c6c2'
@@ -1087,88 +1121,177 @@ with tab2:
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── أعلى وأدنى حسابات ──
+    #  أعلى وأدنى حسابات
+    # خيار عرض kWh أو ريال
+    top5_metric_col, _ = st.columns([1, 3])
+    with top5_metric_col:
+        top5_metric = st.radio(
+            'عرض المقارنة بـ:',
+            options=['الاستهلاك بالكيلوواط (kWh)', 'الفاتورة بالريال (SAR)'],
+            index=0,
+            key='top5_metric',
+            horizontal=True
+        )
+    _use_bill = 'SAR' in top5_metric or 'الريال' in top5_metric
+    _metric_col = 'Bill' if _use_bill else 'Consumption'
+    _metric_label = 'الفاتورة (SAR)' if _use_bill else 'الاستهلاك (kWh)'
+    _metric_unit = 'SAR' if _use_bill else 'kWh'
     col_up, col_down = st.columns(2)
-
     with col_up:
-        st.markdown(section_header('أعلى', f'أعلى 5 حسابات تجميعية استهلاكاً ({dyn_yr})'), unsafe_allow_html=True)
+        st.markdown(section_header('أعلى', f'أعلى 5 حسابات تجميعية {_metric_label} ({dyn_yr})'), unsafe_allow_html=True)
         top_ca = (
             df_f[df_f['Year'] == dyn_yr]
             .groupby('Collective_CA')
             .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
-            .nlargest(5, 'Consumption')
+            .nlargest(5, _metric_col)
             .reset_index()
         )
+        _x_top = top_ca[_metric_col]
         fig_up = go.Figure(go.Bar(
-            x=top_ca['Consumption'],
+            x=_x_top,
             y=top_ca['Collective_CA'],
             orientation='h',
             marker=dict(color='#c0392b', opacity=0.85),
-            text=[f"{fmt_num(v)} | {fmt_num(b, 'SAR')}" for v, b in zip(top_ca['Consumption'], top_ca['Bill'])],
+            text=[fmt_num(v, _metric_unit) for v in _x_top],
             textposition='outside',
             textfont=dict(color='#4a5568', size=11),
-            hovertemplate='<b>حساب: %{y}</b><br>الاستهلاك: %{x:,.0f} kWh<extra></extra>'
+            hovertemplate=f'<b>حساب: %{{y}}</b><br>{_metric_label}: %{{x:,.0f}}<extra></extra>'
         ))
         fig_up.update_layout(**light_layout(height=360, showlegend=False))
         fig_up.update_xaxes(**light_xaxis(tickformat=',.0f'))
         fig_up.update_yaxes(**light_yaxis(tickfont=dict(color='#1a1a2e', size=12), type='category', dtick=1))
         fig_up.update_layout(margin=dict(l=200))
-        st.plotly_chart(fig_up, use_container_width=True, key="top_ca")
-
+        st.plotly_chart(fig_up, use_container_width=True, key='top_ca')
     with col_down:
-        st.markdown(section_header('أدنى', f'أدنى 5 حسابات تجميعية استهلاكاً ({dyn_yr})'), unsafe_allow_html=True)
+        st.markdown(section_header('أدنى', f'أدنى 5 حسابات تجميعية {_metric_label} ({dyn_yr})'), unsafe_allow_html=True)
         bot_ca = (
             df_f[(df_f['Year'] == dyn_yr) & (df_f['Consumption_kWh'] > 0)]
             .groupby('Collective_CA')
             .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
-            .nsmallest(5, 'Consumption')
+            .nsmallest(5, _metric_col)
             .reset_index()
         )
+        _x_bot = bot_ca[_metric_col]
         fig_down = go.Figure(go.Bar(
-            x=bot_ca['Consumption'],
+            x=_x_bot,
             y=bot_ca['Collective_CA'],
             orientation='h',
             marker=dict(color='#27ae60', opacity=0.85),
-            text=[f"{fmt_num(v)} | {fmt_num(b, 'SAR')}" for v, b in zip(bot_ca['Consumption'], bot_ca['Bill'])],
+            text=[fmt_num(v, _metric_unit) for v in _x_bot],
             textposition='outside',
             textfont=dict(color='#4a5568', size=11),
-            hovertemplate='<b>حساب: %{y}</b><br>الاستهلاك: %{x:,.0f} kWh<extra></extra>'
+            hovertemplate=f'<b>حساب: %{{y}}</b><br>{_metric_label}: %{{x:,.0f}}<extra></extra>'
         ))
         fig_down.update_layout(**light_layout(height=360, showlegend=False))
         fig_down.update_xaxes(**light_xaxis(tickformat=',.0f'))
         fig_down.update_yaxes(**light_yaxis(tickfont=dict(color='#1a1a2e', size=12), type='category', dtick=1))
         fig_down.update_layout(margin=dict(l=200))
-        st.plotly_chart(fig_down, use_container_width=True, key="bot_ca")
-
-# ══════════════════════════════════════════════
+        st.plotly_chart(fig_down, use_container_width=True, key='bot_ca')
+    #  مقارنة أعلى 5 حسابات بين السنوات
+    st.markdown(section_header('مقارنة', f'مقارنة أعلى 5 حسابات بين السنوات ({_metric_label})'), unsafe_allow_html=True)
+    _top5_24 = (
+        df[df['Year'] == 2024]
+        .groupby('Collective_CA')
+        .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
+        .nlargest(5, _metric_col)
+        .reset_index()
+    )
+    _top5_25 = (
+        df[df['Year'] == 2025]
+        .groupby('Collective_CA')
+        .agg(Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum'))
+        .nlargest(5, _metric_col)
+        .reset_index()
+    )
+    _all_top_cas = sorted(set(_top5_24['Collective_CA'].tolist()) | set(_top5_25['Collective_CA'].tolist()))
+    _cmp_24 = df[df['Year'] == 2024].groupby('Collective_CA').agg(
+        Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum')
+    ).reset_index()
+    _cmp_25 = df[df['Year'] == 2025].groupby('Collective_CA').agg(
+        Consumption=('Consumption_kWh', 'sum'), Bill=('Bill_Amount', 'sum')
+    ).reset_index()
+    fig_cmp5 = go.Figure()
+    fig_cmp5.add_trace(go.Bar(
+        name='2024',
+        x=_all_top_cas,
+        y=[_cmp_24[_cmp_24['Collective_CA'] == ca][_metric_col].sum() for ca in _all_top_cas],
+        marker=dict(color='#1a6eb5', opacity=0.85),
+    ))
+    fig_cmp5.add_trace(go.Bar(
+        name='2025',
+        x=_all_top_cas,
+        y=[_cmp_25[_cmp_25['Collective_CA'] == ca][_metric_col].sum() for ca in _all_top_cas],
+        marker=dict(color='#1e8c3a', opacity=0.85),
+    ))
+    _cmp5_layout = light_layout(height=380, showlegend=True, barmode='group')
+    _cmp5_layout['title'] = dict(
+        text=f'مقارنة أعلى الحسابات بين 2024 و2025 ({_metric_label})',
+        font=dict(size=14, color='#8b0000'), x=0.01
+    )
+    fig_cmp5.update_layout(**_cmp5_layout)
+    fig_cmp5.update_xaxes(**light_xaxis(tickangle=-30))
+    fig_cmp5.update_yaxes(**light_yaxis(tickformat=',.0f'))
+    st.plotly_chart(fig_cmp5, use_container_width=True, key='top5_compare')
+#
 # تبويب 3: إدارة الأصول
-# ══════════════════════════════════════════════
+#
 with tab3:
     st.markdown(section_header('أصول', 'إدارة الأصول والحسابات التجميعية'), unsafe_allow_html=True)
-
     asset_year = st.selectbox(
-        "اختر السنة لعرض الحسابات التجميعية:",
+        "اختر السنة:",
         options=[2024, 2025, 2026],
         index=0,
         key="asset_year_select"
     )
-
-    ca_for_year = sorted(df[df['Year'] == asset_year]['Collective_CA'].unique().tolist())
-
+    #  هيكل: المدينة → الحسابات التجميعية → العدادات
+    st.markdown(section_header('هيكل', 'هيكل المدن والحسابات التجميعية والعدادات'), unsafe_allow_html=True)
+    _asset_df_yr = df[df['Year'] == asset_year]
+    _asset_cities = sorted(_asset_df_yr['Region_City'].dropna().unique().tolist())
+    _asset_city_sel = st.selectbox(
+        "اختر المدينة لعرض حساباتها التجميعية:",
+        options=['الكل'] + _asset_cities,
+        key="asset_city_sel"
+    )
+    if _asset_city_sel != 'الكل':
+        _city_data = _asset_df_yr[_asset_df_yr['Region_City'] == _asset_city_sel]
+    else:
+        _city_data = _asset_df_yr
+    _city_cas = sorted(_city_data['Collective_CA'].dropna().unique().tolist())
     st.markdown(
         f'<div class="info-banner">'
-        f'عدد الحسابات التجميعية لسنة <b>{asset_year}</b>: '
-        f'<b>{len(ca_for_year)}</b> حساب تجميعي'
+        f'المدينة: <b>{_asset_city_sel}</b> | '
+        f'عدد الحسابات التجميعية: <b>{len(_city_cas)}</b> | '
+        f'عدد العدادات: <b>{_city_data["Contract_Account"].nunique()}</b>'
         f'</div>',
         unsafe_allow_html=True
     )
-
+    # جدول الحسابات التجميعية مع عدد العدادات
+    def _safe_mode_ca(x):
+        m = x.dropna().mode()
+        return m.iloc[0] if len(m) > 0 else '-'
+    _ca_summary_tbl = _city_data.groupby('Collective_CA').agg(
+        عدد_العدادات=('Contract_Account', 'nunique'),
+        الاستهلاك_kWh=('Consumption_kWh', 'sum'),
+        الفاتورة_SAR=('Bill_Amount', 'sum'),
+        المدينة=('Region_City', _safe_mode_ca),
+        المنطقة=('Region_Major', _safe_mode_ca),
+    ).reset_index().sort_values('الاستهلاك_kWh', ascending=False)
+    _ca_summary_tbl.columns = ['الحساب التجميعي', 'عدد العدادات', 'الاستهلاك (kWh)', 'الفاتورة (SAR)', 'المدينة', 'المنطقة']
+    st.dataframe(
+        _ca_summary_tbl.style.format({
+            'الاستهلاك (kWh)': '{:,.0f}',
+            'الفاتورة (SAR)': '{:,.0f}',
+        }),
+        use_container_width=True, hide_index=True
+    )
+    #  اختيار حساب تجميعي لعرض عداداته
+    st.markdown(section_header('عدادات', 'تفاصيل عدادات الحساب التجميعي'), unsafe_allow_html=True)
+    ca_for_year = _city_cas
     search_ca = st.selectbox(
-        "اختر حسابًا تجميعيًا لعرض تفاصيله:",
-        options=["اختر حسابًا..."] + ca_for_year,
+        "اختر حسابًا تجميعيًا لعرض عداداته:",
+        options=["اختر حسابًا..."] + _city_cas,
         key="search_ca_select"
     )
-
     if search_ca != "اختر حسابًا...":
         ca_detail_all = df[df['Collective_CA'] == search_ca]
         ca_detail_yr  = ca_detail_all[ca_detail_all['Year'] == asset_year]
@@ -1258,7 +1381,7 @@ with tab3:
             unsafe_allow_html=True
         )
 
-    # ── مقارنة الحسابات التجميعية 2024 مقابل 2025 ──
+    #  مقارنة الحسابات التجميعية 2024 مقابل 2025
     st.markdown(section_header('مقارنة', 'مقارنة الحسابات التجميعية: 2024 مقابل 2025'), unsafe_allow_html=True)
 
     ca_24_sum = df[df['Year'] == 2024].groupby(['Collective_CA', 'Region_Major'])['Consumption_kWh'].sum().reset_index()
@@ -1328,7 +1451,7 @@ with tab3:
         ))
         st.plotly_chart(fig_share, use_container_width=True, key="region_share")
 
-    # ── الحسابات المرشحة للمراجعة ──
+    #  الحسابات المرشحة للمراجعة
     st.markdown(section_header('تنبيه', 'الحسابات المرشحة للمراجعة'), unsafe_allow_html=True)
 
     high_growth = ca_compare[ca_compare['التغيير_%'] > 50].sort_values('التغيير_%', ascending=False)
@@ -1336,7 +1459,7 @@ with tab3:
 
     alert_col1, alert_col2 = st.columns(2)
     with alert_col1:
-        st.markdown('<div style="color:#e67e22; font-weight:700; font-size:14px; margin-bottom:8px;">⬆️ ارتفاع كبير (أكثر من 50%)</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#e67e22; font-weight:700; font-size:14px; margin-bottom:8px;"> ارتفاع كبير (أكثر من 50%)</div>', unsafe_allow_html=True)
         for _, row in high_growth.iterrows():
             st.markdown(f"""
             <div class="alert-card warning">
@@ -1346,7 +1469,7 @@ with tab3:
             """, unsafe_allow_html=True)
 
     with alert_col2:
-        st.markdown('<div style="color:#c0392b; font-weight:700; font-size:14px; margin-bottom:8px;">⬇️ انخفاض كبير (أكثر من 30%)</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#c0392b; font-weight:700; font-size:14px; margin-bottom:8px;"> انخفاض كبير (أكثر من 30%)</div>', unsafe_allow_html=True)
         for _, row in high_drop.iterrows():
             st.markdown(f"""
             <div class="alert-card danger">
@@ -1355,27 +1478,112 @@ with tab3:
             </div>
             """, unsafe_allow_html=True)
 
-    # ── حسابات استهلاك صفري مع فاتورة ──
-    zero_cons_bill = df_f[
+    #  حسابات استهلاك صفري مع فاتورة
+    st.markdown(section_header('صفري', 'العدادات ذات الاستهلاك الصفري مع وجود فاتورة'), unsafe_allow_html=True)
+    _zero_df = df_f[
         (df_f['Consumption_kWh'] == 0) & (df_f['Bill_Amount'] > 0)
-    ].groupby('Contract_Account').agg(
-        فاتورة=('Bill_Amount', 'sum'),
-        أشهر=('Month', 'nunique')
-    ).reset_index()
+    ]
+    def _safe_mode(x):
+        m = x.dropna().mode()
+        return m.iloc[0] if len(m) > 0 else '-'
+    if len(_zero_df) > 0:
+        zero_cons_tbl = _zero_df.groupby('Contract_Account').agg(
+            الفاتورة_SAR=('Bill_Amount', 'sum'),
+            عدد_الأشهر=('Month', 'nunique'),
+            الحساب_التجميعي=('Collective_CA', _safe_mode),
+            المدينة=('Region_City', _safe_mode),
+            المنطقة=('Region_Major', _safe_mode),
+        ).reset_index().sort_values('الفاتورة_SAR', ascending=False)
+        zero_cons_tbl.columns = ['رقم العداد', 'الفاتورة (SAR)', 'عدد الأشهر', 'الحساب التجميعي', 'المدينة', 'المنطقة']
+        st.markdown(
+            f'<div class="info-banner">يوجد <b>{len(zero_cons_tbl)}</b> عداد باستهلاك صفري (0 kWh) ولكن عليه فاتورة مالية — يستحق المراجعة الإدارية</div>',
+            unsafe_allow_html=True
+        )
+        st.dataframe(
+            zero_cons_tbl.style.format({
+                'الفاتورة (SAR)': '{:,.2f}',
+            }).map(
+                lambda v: 'background-color:#fff0f0;color:#c0392b;font-weight:700;' if isinstance(v, (int, float)) and v > 0 else '',
+                subset=['الفاتورة (SAR)']
+            ),
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.info("لا توجد عدادات باستهلاك صفري مع فاتورة في الفلتر المحدد")
+   
+        #  جدول الحسابات المفقودة بين السنوات
+    st.markdown(section_header('مفقود', 'الحسابات التجميعية المفقودة بين السنوات'), unsafe_allow_html=True)
+    _ca_2024_set = set(df[df['Year'] == 2024]['Collective_CA'].unique())
+    _ca_2025_set = set(df[df['Year'] == 2025]['Collective_CA'].unique())
+    _ca_2026_set = set(df[df['Year'] == 2026]['Collective_CA'].unique())
+    _miss_24_25 = sorted(_ca_2024_set - _ca_2025_set)
+    _miss_25_26 = sorted(_ca_2025_set - _ca_2026_set)
+    miss_tab1, miss_tab2 = st.tabs([
+        f"موجودة في 2024 وغير موجودة في 2025 ({len(_miss_24_25)} حساب)",
+        f"موجودة في 2025 وغير موجودة في 2026 ({len(_miss_25_26)} حساب)"
+    ])
+    with miss_tab1:
+        if _miss_24_25:
+            _d24 = df[df['Year'] == 2024]
+            _miss_24_25_rows = []
+            for _ca in _miss_24_25:
+                _sub = _d24[_d24['Collective_CA'] == _ca]
+                if len(_sub) == 0:
+                    continue
+                _region = _sub['Region_Major'].dropna().mode()
+                _city   = _sub['Region_City'].dropna().mode() if 'Region_City' in _sub.columns else pd.Series([])
+                _miss_24_25_rows.append({
+                    'الحساب التجميعي': str(_ca),
+                    'المنطقة': _region.iloc[0] if len(_region) > 0 else '-',
+                    'المدينة': _city.iloc[0] if len(_city) > 0 else '-',
+                    'الاستهلاك 2024 (kWh)': _sub['Consumption_kWh'].sum(),
+                    'الفاتورة 2024 (SAR)': _sub['Bill_Amount'].sum(),
+                    'عدد الأشهر': _sub['Month'].nunique(),
+                })
+            _miss_df1 = pd.DataFrame(_miss_24_25_rows)
+            st.markdown(f'<div class="info-banner">إجمالي <b>{len(_miss_24_25)}</b> حساب تجميعي كان موجوداً في 2024 ولم يظهر في بيانات 2025</div>', unsafe_allow_html=True)
+            st.dataframe(
+                _miss_df1.style.format({
+                    'الاستهلاك 2024 (kWh)': '{:,.0f}',
+                    'الفاتورة 2024 (SAR)': '{:,.2f}'
+                }),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.info("لا توجد حسابات مفقودة بين 2024 و2025")
+    with miss_tab2:
+        if _miss_25_26:
+            _d25 = df[df['Year'] == 2025]
+            _miss_25_26_rows = []
+            for _ca in _miss_25_26:
+                _sub = _d25[_d25['Collective_CA'] == _ca]
+                if len(_sub) == 0:
+                    continue
+                _region = _sub['Region_Major'].dropna().mode()
+                _city   = _sub['Region_City'].dropna().mode() if 'Region_City' in _sub.columns else pd.Series([])
+                _miss_25_26_rows.append({
+                    'الحساب التجميعي': str(_ca),
+                    'المنطقة': _region.iloc[0] if len(_region) > 0 else '-',
+                    'المدينة': _city.iloc[0] if len(_city) > 0 else '-',
+                    'الاستهلاك 2025 (kWh)': _sub['Consumption_kWh'].sum(),
+                    'الفاتورة 2025 (SAR)': _sub['Bill_Amount'].sum(),
+                    'عدد الأشهر': _sub['Month'].nunique(),
+                })
+            _miss_df2 = pd.DataFrame(_miss_25_26_rows)
+            st.markdown(f'<div class="info-banner">إجمالي <b>{len(_miss_25_26)}</b> حساب تجميعي كان موجوداً في 2025 ولم يظهر في بيانات 2026</div>', unsafe_allow_html=True)
+            st.dataframe(
+                _miss_df2.style.format({
+                    'الاستهلاك 2025 (kWh)': '{:,.0f}',
+                    'الفاتورة 2025 (SAR)': '{:,.2f}'
+                }),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.info("لا توجد حسابات مفقودة بين 2025 و2026")
 
-    if len(zero_cons_bill) > 0:
-        st.markdown('<div style="color:#8e44ad; font-weight:700; font-size:14px; margin:12px 0 8px;">⚠️ استهلاك صفري مع فاتورة</div>', unsafe_allow_html=True)
-        for _, row in zero_cons_bill.iterrows():
-            st.markdown(f"""
-            <div class="alert-card" style="border-right:4px solid #8e44ad;">
-                <div style="font-weight:700; font-size:13px;">حساب {row['Contract_Account']}</div>
-                <div style="color:#7a7a8a; font-size:12px;">فاتورة: {row['فاتورة']:.2f} ريال | {row['أشهر']} أشهر</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════
+#
 # تبويب الجغرافي
-# ══════════════════════════════════════════════
+#
 with tab_geo:
     st.markdown(section_header('جغرافي', 'التحليل الجغرافي حسب المنطقة'), unsafe_allow_html=True)
 
@@ -1497,10 +1705,185 @@ with tab_geo:
         }).map(lambda v: 'background-color: #fff5f5; color: #c0392b;' if isinstance(v, (int, float)) and v > 0 else '', subset=['الاستهلاك (kWh)']),
         use_container_width=True
     )
+    #  خريطة المدن بالإحداثيات الحقيقية من البيانات
+    st.markdown(section_header('خريطة', 'خريطة الاستهلاك حسب المدن (إحداثيات حقيقية)'), unsafe_allow_html=True)
+    # استخدام الإحداثيات الحقيقية من عمودَي Latitude و Longitude
+    city_geo = df_f.groupby('Region_City').agg(
+        Consumption=('Consumption_kWh', 'sum'),
+        Bill=('Bill_Amount', 'sum'),
+        Contracts=('Contract_Account', 'nunique'),
+        CAs=('Collective_CA', 'nunique'),
+        lat=('Latitude', 'mean'),
+        lon=('Longitude', 'mean')
+    ).reset_index()
+    city_geo = city_geo[city_geo['Region_City'].notna()].dropna(subset=['lat', 'lon'])
+    if len(city_geo) > 0:
+        _max_cons = city_geo['Consumption'].max()
+        city_geo['size'] = (city_geo['Consumption'] / _max_cons * 50 + 10).clip(10, 60)
+        fig_map = go.Figure()
+        fig_map.add_trace(go.Scattergeo(
+            lat=city_geo['lat'],
+            lon=city_geo['lon'],
+            text=city_geo['Region_City'],
+            name='المدن',
+            mode='markers+text',
+            textposition='top center',
+            textfont=dict(size=12, color='#8b0000', family='Arial'),
+            marker=dict(
+                size=city_geo['size'],
+                color=city_geo['Consumption'],
+                colorscale=[[0, '#fde8e8'], [0.5, '#e74c3c'], [1, '#8b0000']],
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text='الاستهلاك (kWh)', font=dict(size=12, color='#1a1a2e')),
+                    tickfont=dict(size=10, color='#1a1a2e'),
+                    len=0.6, x=1.01
+                ),
+                line=dict(color='white', width=1.5),
+                opacity=0.85
+            ),
+            customdata=city_geo[['Consumption', 'Bill', 'CAs', 'Contracts']].values,
+            hovertemplate=(
+                '<b>%{text}</b><br>'
+                'الاستهلاك: %{customdata[0]:,.0f} kWh<br>'
+                'الفاتورة: %{customdata[1]:,.0f} SAR<br>'
+                'حسابات تجميعية: %{customdata[2]}<br>'
+                'عدادات: %{customdata[3]}<extra></extra>'
+            )
+        ))
+        _geo_layout = dict(
+            height=520,
+            paper_bgcolor='#ffffff',
+            showlegend=False,
+            geo=dict(
+                scope='asia',
+                center=dict(lat=24.0, lon=44.0),
+                projection_scale=4.8,
+                showland=True,
+                landcolor='#f5f0e8',
+                showocean=True,
+                oceancolor='#d6eaf8',
+                showlakes=False,
+                showcountries=True,
+                countrycolor='#bdc3c7',
+                showcoastlines=True,
+                coastlinecolor='#95a5a6',
+                bgcolor='#ffffff',
+            ),
+            margin=dict(l=0, r=0, t=40, b=0),
+            title=dict(text='خريطة الاستهلاك حسب المدن - المملكة العربية السعودية', font=dict(size=14, color='#8b0000'), x=0.01)
+        )
+        fig_map.update_layout(**_geo_layout)
+        st.plotly_chart(fig_map, use_container_width=True, key="saudi_map")
+        # جدول المدن
+        st.markdown(section_header('مدن', 'جدول الاستهلاك حسب المدن'), unsafe_allow_html=True)
+        city_tbl = city_geo[['Region_City', 'Consumption', 'Bill', 'CAs', 'Contracts']].copy()
+        city_tbl.columns = ['المدينة', 'الاستهلاك (kWh)', 'الفاتورة (SAR)', 'حسابات تجميعية', 'عدادات']
+        city_tbl = city_tbl.sort_values('الاستهلاك (kWh)', ascending=False).reset_index(drop=True)
+        city_tbl['نسبة %'] = (city_tbl['الاستهلاك (kWh)'] / city_tbl['الاستهلاك (kWh)'].sum() * 100).round(1)
+        st.dataframe(
+            city_tbl.style.format({
+                'الاستهلاك (kWh)': '{:,.0f}',
+                'الفاتورة (SAR)': '{:,.2f}',
+                'نسبة %': '{:.1f}%'
+            }),
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.info("لا توجد بيانات جغرافية متاحة للفلتر المحدد")
+    #  خريطة المكاتب بالإحداثيات الحقيقية
+    st.markdown(section_header('مكاتب', 'خريطة مواقع مكاتب الهلال الأحمر'), unsafe_allow_html=True)
+    if 'Office' in df_f.columns and 'Latitude' in df_f.columns:
+        office_geo = df_f.groupby(['Office', 'Region_City']).agg(
+            Consumption=('Consumption_kWh', 'sum'),
+            Bill=('Bill_Amount', 'sum'),
+            Contracts=('Contract_Account', 'nunique'),
+            lat=('Latitude', 'mean'),
+            lon=('Longitude', 'mean')
+        ).reset_index().dropna(subset=['lat', 'lon'])
+        office_geo = office_geo[office_geo['Consumption'] > 0].sort_values('Consumption', ascending=False)
+        if len(office_geo) > 0:
+            _oc_max = office_geo['Consumption'].max()
+            office_geo['size'] = (office_geo['Consumption'] / _oc_max * 30 + 6).clip(6, 36)
+            # ألوان حسب المدينة
+            _city_list = office_geo['Region_City'].unique().tolist()
+            _palette = ['#c0392b','#1a6eb5','#27ae60','#e67e22','#8e44ad',
+                        '#16a085','#d35400','#2980b9','#c0392b','#7f8c8d',
+                        '#1abc9c','#e74c3c','#3498db']
+            _city_color = {c: _palette[i % len(_palette)] for i, c in enumerate(_city_list)}
+            office_geo['color'] = office_geo['Region_City'].map(_city_color)
+            fig_offices = go.Figure()
+            # رسم كل مدينة كـ trace منفصل لإظهار Legend
+            for _city in _city_list:
+                _sub = office_geo[office_geo['Region_City'] == _city]
+                fig_offices.add_trace(go.Scattergeo(
+                    lat=_sub['lat'],
+                    lon=_sub['lon'],
+                    name=_city,
+                    mode='markers',
+                    marker=dict(
+                        size=_sub['size'],
+                        color=_city_color[_city],
+                        opacity=0.82,
+                        line=dict(color='white', width=0.8)
+                    ),
+                    customdata=_sub[['Office', 'Consumption', 'Bill', 'Contracts', 'Region_City']].values,
+                    hovertemplate=(
+                        '<b>%{customdata[0]}</b><br>'
+                        'المدينة: %{customdata[4]}<br>'
+                        'الاستهلاك: %{customdata[1]:,.0f} kWh<br>'
+                        'الفاتورة: %{customdata[2]:,.0f} SAR<br>'
+                        'عدادات: %{customdata[3]}<extra></extra>'
+                    )
+                ))
+            fig_offices.update_layout(
+                height=560,
+                paper_bgcolor='#ffffff',
+                showlegend=True,
+                legend=dict(
+                    title=dict(text='المدينة', font=dict(size=12, color='#1a1a2e')),
+                    font=dict(size=11, color='#1a1a2e'),
+                    bgcolor='rgba(255,255,255,0.9)',
+                    bordercolor='#e0e0e0',
+                    borderwidth=1,
+                    x=1.01, y=0.5
+                ),
+                geo=dict(
+                    scope='asia',
+                    center=dict(lat=24.0, lon=44.0),
+                    projection_scale=4.8,
+                    showland=True,
+                    landcolor='#f5f0e8',
+                    showocean=True,
+                    oceancolor='#d6eaf8',
+                    showlakes=False,
+                    showcountries=True,
+                    countrycolor='#bdc3c7',
+                    showcoastlines=True,
+                    coastlinecolor='#95a5a6',
+                    bgcolor='#ffffff',
+                ),
+                margin=dict(l=0, r=120, t=40, b=0),
+                title=dict(text=f'مواقع المكاتب ({len(office_geo)} مكتب) - المملكة العربية السعودية', font=dict(size=14, color='#8b0000'), x=0.01)
+            )
+            st.plotly_chart(fig_offices, use_container_width=True, key="offices_map")
+            # جدول أعلى المكاتب استهلاكاً
+            st.markdown(section_header('أعلى', 'أعلى 15 مكتباً استهلاكاً'), unsafe_allow_html=True)
+            _top_offices = office_geo[['Office', 'Region_City', 'Consumption', 'Bill', 'Contracts']].head(15).copy()
+            _top_offices.columns = ['المكتب', 'المدينة', 'الاستهلاك (kWh)', 'الفاتورة (SAR)', 'عدادات']
+            _top_offices['نسبة %'] = (_top_offices['الاستهلاك (kWh)'] / office_geo['Consumption'].sum() * 100).round(1)
+            st.dataframe(
+                _top_offices.style.format({
+                    'الاستهلاك (kWh)': '{:,.0f}',
+                    'الفاتورة (SAR)': '{:,.2f}',
+                    'نسبة %': '{:.1f}%'
+                }),
+                use_container_width=True, hide_index=True
+            )
 
-# ══════════════════════════════════════════════
+#
 # تبويب 4: توقعات 2026
-# ══════════════════════════════════════════════
+#
 with tab4:
     st.markdown(section_header('توقعات', 'نموذج التنبؤ بالاستهلاك 2026'), unsafe_allow_html=True)
 
@@ -1531,7 +1914,7 @@ with tab4:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── معلومات تدريب النموذج ──
+    #  معلومات تدريب النموذج
     st.markdown(section_header('نموذج', 'معلومات تدريب النموذج'), unsafe_allow_html=True)
 
     if model_metrics:
@@ -1625,25 +2008,76 @@ with tab4:
         avg_actual_kwh=avg_actual_kwh
     ), unsafe_allow_html=True)
 
-   
-    # ── مقارنة أداء النماذج الثلاثة (دائماً مرئية) ──
+  
+    #  مقارنة أداء النماذج الثلاثة (تفاعلية)
     st.markdown(section_header('نماذج', 'مقارنة أداء النماذج الثلاثة'), unsafe_allow_html=True)
 
     MODELS_DATA = [
-        {'name': 'XGBoost',           'r2': '94.75%', 'rmse': '1,733.8', 'mae': '590.7',   'mae_pct': '16.7%', 'status': ' الأفضل', 'color': '#27ae60', 'bg': '#f0fff4', 'is_best': True},
-        {'name': 'Random Forest',     'r2': '93.12%', 'rmse': '1,921.4', 'mae': '648.3',   'mae_pct': '18.4%', 'status': ' جيد',    'color': '#2980b9', 'bg': '#f0f8ff', 'is_best': False},
-        {'name': 'Linear Regression', 'r2': '81.45%', 'rmse': '3,105.2', 'mae': '1,842.6', 'mae_pct': '52.3%', 'status': ' مقبول',  'color': '#7f8c8d', 'bg': '#f9f9f9', 'is_best': False},
+        {
+            'name': 'XGBoost',
+            'r2': '94.75%', 'rmse': '1,733.8', 'mae': '590.7', 'mae_pct': '16.7%',
+            'status': ' الأفضل', 'color': '#27ae60', 'bg': '#f0fff4', 'is_best': True,
+            'details': {
+                'النموذج': 'XGBoost',
+                'R² Score': '94.75%',
+                'RMSE (kWh)': '1,733.8',
+                'MAE (kWh)': '590.7',
+                'نسبة خطأ MAE': '16.7%',
+                'التقييم': ' الأفضل',
+                'وصف': 'نموذج تعزيزي قائم على الأشجار — يتعلم من أخطاء النماذج السابقة تدريجياً',
+                'المزايا': 'دقة عالية، مقاوم للبيانات الشاذة، يتعامل مع العلاقات غير الخطية',
+                'الاستخدام': 'مُختار للتوقعات النهائية في هذا المشروع',
+            }
+        },
+        {
+            'name': 'Random Forest',
+            'r2': '93.12%', 'rmse': '1,921.4', 'mae': '648.3', 'mae_pct': '18.4%',
+            'status': 'جيد', 'color': '#2980b9', 'bg': '#f0f8ff', 'is_best': False,
+            'details': {
+                'النموذج': 'Random Forest',
+                'R² Score': '93.12%',
+                'RMSE (kWh)': '1,921.4',
+                'MAE (kWh)': '648.3',
+                'نسبة خطأ MAE': '18.4%',
+                'التقييم': 'جيد',
+                'وصف': 'مجموعة من أشجار القرار تعمل بالتوازي — كل شجرة تصوت على النتيجة',
+                'المزايا': 'مستقر، يقاوم الـ Overfitting، سهل التفسير',
+                'الاستخدام': 'نموذج احتياطي جيد — أداؤه قريب من XGBoost',
+            }
+        },
+        {
+            'name': 'Linear Regression',
+            'r2': '61.40%', 'rmse': '4,512.3', 'mae': '2,843.7', 'mae_pct': '80.7%',
+            'status': 'الأضعف', 'color': '#7f8c8d', 'bg': '#f8f9fa', 'is_best': False,
+            'details': {
+                'النموذج': 'Linear Regression',
+                'R² Score': '61.40%',
+                'RMSE (kWh)': '4,512.3',
+                'MAE (kWh)': '2,843.7',
+                'نسبة خطأ MAE': '80.7%',
+                'التقييم': 'الأضعف',
+                'وصف': 'نموذج خطي بسيط — يفترض علاقة خطية بين المتغيرات',
+                'المزايا': 'سريع وبسيط، لكن لا يلتقط العلاقات غير الخطية في بيانات الكهرباء',
+                'الاستخدام': 'نموذج مرجعي للمقارنة — أضعف النماذج الثلاثة',
+            }
+        },
     ]
 
+    # Session state for selected model
+    if 'selected_model' not in st.session_state:
+        st.session_state['selected_model'] = None
+
+    # Display model cards with buttons
     mc1, mc2, mc3 = st.columns(3)
     for col, mdl in zip([mc1, mc2, mc3], MODELS_DATA):
-        crown = "<div style=\'font-size:30px;margin-bottom:6px;\'></div>" if mdl['is_best'] else "<div style=\'height:36px;\'></div>"
+        crown = "<div style='font-size:12px;font-weight:700;color:#c0a000;border:1px solid #c0a000;border-radius:6px;padding:2px 8px;display:inline-block;margin-bottom:4px;'>الافضل</div>" if mdl['is_best'] else "<div style='height:28px;'></div>"
         bw = "3px" if mdl['is_best'] else "1px"
+        selected = st.session_state.get('selected_model') == mdl['name']
+        ring = f"box-shadow:0 0 0 3px {mdl['color']};" if selected else "box-shadow:0 2px 8px rgba(0,0,0,0.07);"
         with col:
             st.markdown(
                 f"""<div style="border:{bw} solid {mdl['color']};border-radius:14px;padding:18px 14px;
-                    background:{mdl['bg']};text-align:center;margin-bottom:10px;
-                    box-shadow:0 2px 8px rgba(0,0,0,0.07);">
+                    background:{mdl['bg']};text-align:center;margin-bottom:6px;{ring}">
                     {crown}
                     <div style="font-size:19px;font-weight:700;color:{mdl['color']};margin-bottom:6px;">{mdl['name']}</div>
                     <div style="font-size:13px;color:#555;margin-bottom:12px;font-weight:600;">{mdl['status']}</div>
@@ -1669,26 +2103,28 @@ with tab4:
                 unsafe_allow_html=True
             )
 
+
+    # Summary comparison table always visible
     st.markdown("<br>", unsafe_allow_html=True)
     models_summary_df = pd.DataFrame([{
-        'النموذج': m['name'], 'R² Score': m['r2'],
-        'RMSE (kWh)': m['rmse'], 'MAE (kWh)': m['mae'],
-        'نسبة خطأ MAE': m['mae_pct'], 'التقييم': m['status']
-    } for m in MODELS_DATA])
+            'النموذج': m['name'], 'R² Score': m['r2'],
+            'RMSE (kWh)': m['rmse'], 'MAE (kWh)': m['mae'],
+            'نسبة خطأ MAE': m['mae_pct'], 'التقييم': m['status']
+        } for m in MODELS_DATA])
 
-    def _hl_xgb(row):
+    def _hl_best(row):
         if row['النموذج'] == 'XGBoost':
             return ['background-color:#f0fff4;font-weight:bold;color:#27ae60;'] * len(row)
         return [''] * len(row)
 
     st.dataframe(
-        models_summary_df.style.apply(_hl_xgb, axis=1),
+        models_summary_df.style.apply(_hl_best, axis=1),
         use_container_width=True, hide_index=True
     )
+
     st.markdown("<br>", unsafe_allow_html=True)
 
-
-    # ── الاستهلاك الفعلي والمتوقع 2026 ──
+    #  الاستهلاك الفعلي والمتوقع 2026
     st.markdown(section_header('بياني', 'الاستهلاك الفعلي والمتوقع 2026'), unsafe_allow_html=True)
 
     forecast_monthly = pred_df.groupby(['Month', 'Type'])['Predicted_Consumption'].sum().reset_index()
@@ -1734,7 +2170,7 @@ with tab4:
     fig_forecast.update_yaxes(**light_yaxis(tickformat=',.0f'))
     st.plotly_chart(fig_forecast, use_container_width=True, key="forecast_main")
 
-    # ── مقارنة Q1 ──
+    #  مقارنة Q1
     if len(q1_comp_agg) > 0:
         st.markdown(section_header('Q1', 'مقارنة الربع الأول 2026: الفعلي مقابل المتوقع'), unsafe_allow_html=True)
         q1_col1, q1_col2 = st.columns(2)
@@ -1775,7 +2211,7 @@ with tab4:
             fig_err.update_yaxes(**light_yaxis(ticksuffix='%'))
             st.plotly_chart(fig_err, use_container_width=True, key="q1_err")
 
-    # ── توقعات الأرباع ──
+    #  توقعات الأرباع
     st.markdown(section_header('أرباع', 'توقعات الأرباع 2026'), unsafe_allow_html=True)
 
     quarter_map = {
@@ -1841,7 +2277,138 @@ with tab4:
         with q_chart_cols[idx]:
             st.plotly_chart(fig_q, use_container_width=True, key=f"q{idx+2}_chart")
 
-    # ── ملخص التوقعات السنوية ──
+    #  توقعات 2026 حسب المدن
+    st.markdown(section_header('مدن', 'توقعات الاستهلاك والفواتير 2026 حسب المدن'), unsafe_allow_html=True)
+    if 'Region_City' in pred_df.columns:
+        city_pred = pred_df.groupby('Region_City')['Predicted_Consumption'].sum().reset_index()
+        city_pred = city_pred[city_pred['Region_City'].notna()].sort_values('Predicted_Consumption', ascending=False)
+        # مقارنة مع 2024 و2025 (kWh + SAR)
+        city_24 = df[df['Year'] == 2024].groupby('Region_City').agg(
+            Consumption_2024=('Consumption_kWh', 'sum'),
+            Bill_2024=('Bill_Amount', 'sum')
+        ).reset_index()
+        city_25 = df[df['Year'] == 2025].groupby('Region_City').agg(
+            Consumption_2025=('Consumption_kWh', 'sum'),
+            Bill_2025=('Bill_Amount', 'sum')
+        ).reset_index()
+        city_pred_cmp = city_pred.merge(city_24, on='Region_City', how='left').merge(city_25, on='Region_City', how='left')
+        city_pred_cmp['Consumption_2024'] = city_pred_cmp['Consumption_2024'].fillna(0)
+        city_pred_cmp['Consumption_2025'] = city_pred_cmp['Consumption_2025'].fillna(0)
+        city_pred_cmp['Bill_2024'] = city_pred_cmp['Bill_2024'].fillna(0)
+        city_pred_cmp['Bill_2025'] = city_pred_cmp['Bill_2025'].fillna(0)
+        # حساب تقدير الفاتورة 2026 بناءً على نسبة SAR/kWh لكل مدينة في 2025
+        city_pred_cmp['sar_per_kwh_25'] = city_pred_cmp.apply(
+            lambda r: r['Bill_2025'] / r['Consumption_2025'] if r['Consumption_2025'] > 0 else 0, axis=1
+        )
+        # إذا مدينة ما عندها بيانات 2025، نستخدم المتوسط العام
+        _global_sar_kwh = df[df['Year'] == 2025]['Bill_Amount'].sum() / max(df[df['Year'] == 2025]['Consumption_kWh'].sum(), 1)
+        city_pred_cmp['sar_per_kwh_25'] = city_pred_cmp['sar_per_kwh_25'].replace(0, _global_sar_kwh)
+        city_pred_cmp['Bill_2026_pred'] = city_pred_cmp['Predicted_Consumption'] * city_pred_cmp['sar_per_kwh_25']
+        # خيار عرض kWh أو SAR
+        _pred_city_metric_col, _ = st.columns([1, 3])
+        with _pred_city_metric_col:
+            _pred_city_metric = st.radio(
+                'عرض التوقعات بـ:',
+                options=['الاستهلاك بالكيلوواط (kWh)', 'الفاتورة بالريال (SAR)'],
+                index=0,
+                key='pred_city_metric',
+                horizontal=True
+            )
+        _use_sar_pred = 'SAR' in _pred_city_metric or 'الريال' in _pred_city_metric
+        if _use_sar_pred:
+            _y24 = city_pred_cmp['Bill_2024']
+            _y25 = city_pred_cmp['Bill_2025']
+            _y26 = city_pred_cmp['Bill_2026_pred']
+            _pred_unit = 'SAR'
+            _pred_title = 'مقارنة الفواتير الفعلية والمتوقعة حسب المدن (2024-2026) - ريال سعودي'
+        else:
+            _y24 = city_pred_cmp['Consumption_2024']
+            _y25 = city_pred_cmp['Consumption_2025']
+            _y26 = city_pred_cmp['Predicted_Consumption']
+            _pred_unit = 'kWh'
+            _pred_title = 'مقارنة الاستهلاك الفعلي والمتوقع حسب المدن (2024-2026) - كيلوواط/ساعة'
+        fig_city_pred = go.Figure()
+        fig_city_pred.add_trace(go.Bar(
+            name='2024 فعلي',
+            x=city_pred_cmp['Region_City'],
+            y=_y24,
+            marker=dict(color='#2980b9', opacity=0.8),
+            text=[fmt_num(v, _pred_unit) for v in _y24],
+            textposition='outside',
+            textfont=dict(size=10, color='#1a1a2e')
+        ))
+        fig_city_pred.add_trace(go.Bar(
+            name='2025 فعلي',
+            x=city_pred_cmp['Region_City'],
+            y=_y25,
+            marker=dict(color='#27ae60', opacity=0.8),
+            text=[fmt_num(v, _pred_unit) for v in _y25],
+            textposition='outside',
+            textfont=dict(size=10, color='#1a1a2e')
+        ))
+        fig_city_pred.add_trace(go.Bar(
+            name='2026 متوقع',
+            x=city_pred_cmp['Region_City'],
+            y=_y26,
+            marker=dict(color='#c0392b', opacity=0.8),
+            text=[fmt_num(v, _pred_unit) for v in _y26],
+            textposition='outside',
+            textfont=dict(size=10, color='#1a1a2e')
+        ))
+        _city_pred_layout = light_layout(height=440, showlegend=True, barmode='group')
+        _city_pred_layout['title'] = dict(text=_pred_title, font=dict(size=13, color='#8b0000'), x=0.01)
+        _city_pred_layout['legend'] = dict(
+            orientation='h', yanchor='bottom', y=1.02,
+            xanchor='right', x=1, font=dict(size=12, color='#1a1a2e')
+        )
+        fig_city_pred.update_layout(**_city_pred_layout)
+        fig_city_pred.update_xaxes(**light_xaxis(tickangle=-30))
+        fig_city_pred.update_yaxes(**light_yaxis(tickformat=',.0f'))
+        st.plotly_chart(fig_city_pred, use_container_width=True, key="city_pred_bar")
+        # جدول ملخص المدن (kWh + SAR معاً)
+        st.markdown(section_header('جدول', 'جدول التوقعات السنوية حسب المدن (إجمالي كل سنة كاملة)'), unsafe_allow_html=True)
+        city_pred_tbl = city_pred_cmp[['Region_City','Consumption_2024','Bill_2024','Consumption_2025','Bill_2025','Predicted_Consumption','Bill_2026_pred']].copy()
+        city_pred_tbl.columns = ['المدينة','استهلاك 2024 سنوي (kWh)','فاتورة 2024 سنوية (SAR)','استهلاك 2025 سنوي (kWh)','فاتورة 2025 سنوية (SAR)','توقع 2026 سنوي (kWh)','تقدير فاتورة 2026 (SAR)']
+        city_pred_tbl['نمو kWh 25→26 %'] = city_pred_tbl.apply(
+            lambda r: round(delta_pct(r['توقع 2026 سنوي (kWh)'], r['استهلاك 2025 سنوي (kWh)']), 1), axis=1
+        )
+        city_pred_tbl['نمو SAR 25→26 %'] = city_pred_tbl.apply(
+            lambda r: round(delta_pct(r['تقدير فاتورة 2026 (SAR)'], r['فاتورة 2025 سنوية (SAR)']), 1), axis=1
+        )
+        st.dataframe(
+            city_pred_tbl.style.format({
+                'استهلاك 2024 سنوي (kWh)': '{:,.0f}',
+                'فاتورة 2024 سنوية (SAR)': '{:,.0f}',
+                'استهلاك 2025 سنوي (kWh)': '{:,.0f}',
+                'فاتورة 2025 سنوية (SAR)': '{:,.0f}',
+                'توقع 2026 سنوي (kWh)': '{:,.0f}',
+                'تقدير فاتورة 2026 (SAR)': '{:,.0f}',
+                'نمو kWh 25→26 %': '{:+.1f}%',
+                'نمو SAR 25→26 %': '{:+.1f}%',
+            }),
+            use_container_width=True, hide_index=True
+        )
+        # بطاقات أعلى 3 مدن متوقعة
+        st.markdown(section_header('تنبيه', 'المدن الأعلى في التوقعات (تستحق المتابعة)'), unsafe_allow_html=True)
+        _top3 = city_pred_cmp.nlargest(3, 'Predicted_Consumption')
+        _t3_cols = st.columns(3)
+        for _i, (_, _row) in enumerate(zip(range(3), _top3.itertuples())):
+            _growth = delta_pct(_row.Predicted_Consumption, _row.Consumption_2025)
+            _arrow = '' if _growth >= 0 else ''
+            _color = '#c0392b' if _growth >= 0 else '#27ae60'
+            _bg = '#fff5f5' if _growth >= 0 else '#f0fff4'
+            with _t3_cols[_i]:
+                _html_card = (
+                    f'<div style="background:{_bg};border:2px solid {_color};border-radius:12px;padding:16px;text-align:center;">'
+                    f'<div style="color:#6b7a8d;font-size:12px;font-weight:600;">{_row.Region_City}</div>'
+                    f'<div style="color:{_color};font-size:22px;font-weight:800;margin:6px 0;">{fmt_num(_row.Predicted_Consumption)}</div>'
+                    f'<div style="color:#9aa5b4;font-size:11px;">توقع 2026 (kWh)</div>'
+                    f'<div style="color:{_color};font-size:14px;font-weight:700;margin-top:4px;">{_arrow} {abs(_growth):.1f}% مقارنة بـ 2025</div>'
+                    f'<div style="color:#4a5568;font-size:11px;margin-top:4px;">تقدير الفاتورة: {fmt_num(_row.Bill_2026_pred, "SAR")}</div>'
+                    '</div>'
+                )
+                st.markdown(_html_card, unsafe_allow_html=True)
+    #  ملخص التوقعات السنوية
     st.markdown(section_header('ملخص', 'ملخص التوقعات السنوية'), unsafe_allow_html=True)
 
     summary_data = {
@@ -1872,9 +2439,9 @@ with tab4:
     fig_summary.update_yaxes(**light_yaxis(tickformat=',.0f'))
     st.plotly_chart(fig_summary, use_container_width=True, key="summary_bar")
 
-# ─────────────────────────────────────────────
+#
 # تذييل الصفحة
-# ─────────────────────────────────────────────
+#
 st.markdown("""
 <div class="footer">
      تحليل استهلاك الكهرباء | هيئة الهلال الأحمر السعودي | أبريل 2026
